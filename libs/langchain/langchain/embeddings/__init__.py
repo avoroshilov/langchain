@@ -18,6 +18,7 @@ from langchain.embeddings.aleph_alpha import (
     AlephAlphaAsymmetricSemanticEmbedding,
     AlephAlphaSymmetricSemanticEmbedding,
 )
+from langchain.embeddings.autogptq import AutoGPTQEmbeddings
 from langchain.embeddings.awa import AwaEmbeddings
 from langchain.embeddings.bedrock import BedrockEmbeddings
 from langchain.embeddings.clarifai import ClarifaiEmbeddings
