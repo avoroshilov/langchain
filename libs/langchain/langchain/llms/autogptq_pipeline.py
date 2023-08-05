@@ -9,14 +9,15 @@ from langchain.llms.base import LLM
 from langchain.llms.utils import enforce_stop_tokens
 
 DEFAULT_MODEL_ID = "gpt2"
+# TODO avoroshilov: remove the tasks
 DEFAULT_TASK = "text-generation"
 VALID_TASKS = ("text2text-generation", "text-generation", "summarization")
 
 logger = logging.getLogger(__name__)
 
 
-class HuggingFacePipeline(LLM):
-    """HuggingFace Pipeline API.
+class AutoGPTQPipeline(LLM):
+    """HuggingFace AutoGPTQ API.
 
     To use, you should have the ``transformers`` python package installed.
 
@@ -25,8 +26,8 @@ class HuggingFacePipeline(LLM):
     Example using from_model_id:
         .. code-block:: python
 
-            from langchain.llms import HuggingFacePipeline
-            hf = HuggingFacePipeline.from_model_id(
+            from langchain.llms import AutoGPTQPipeline
+            hf = AutoGPTQPipeline.from_model_id(
                 model_id="gpt2",
                 task="text-generation",
                 pipeline_kwargs={"max_new_tokens": 10},
@@ -34,16 +35,17 @@ class HuggingFacePipeline(LLM):
     Example passing pipeline in directly:
         .. code-block:: python
 
-            from langchain.llms import HuggingFacePipeline
-            from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+            from langchain.llms import AutoGPTQPipeline
+            from transformers import AutoTokenizer, pipeline
+            from auto_gptq import AutoGPTQForCausalLM
 
             model_id = "gpt2"
             tokenizer = AutoTokenizer.from_pretrained(model_id)
-            model = AutoModelForCausalLM.from_pretrained(model_id)
+            model = AutoGPTQForCausalLM.from_pretrained(model_id)
             pipe = pipeline(
                 "text-generation", model=model, tokenizer=tokenizer, max_new_tokens=10
             )
-            hf = HuggingFacePipeline(pipeline=pipe)
+            hf = AutoGPTQPipeline(pipeline=pipe)
     """
 
     pipeline: Any  #: :meta private:
@@ -53,6 +55,8 @@ class HuggingFacePipeline(LLM):
     """Key word arguments passed to the model."""
     pipeline_kwargs: Optional[dict] = None
     """Key word arguments passed to the pipeline."""
+    call_kwargs: Optional[dict] = None
+    """Key word arguments passed when calling the pipeline."""
 
     class Config:
         """Configuration for this pydantic object."""
@@ -62,21 +66,27 @@ class HuggingFacePipeline(LLM):
     @classmethod
     def from_model_id(
         cls,
-        model_id: str,
+        model_name_or_path: str,
+        model_basename: str,
         task: str,
         device: int = -1,
         model_kwargs: Optional[dict] = None,
         pipeline_kwargs: Optional[dict] = None,
+        call_kwargs: Optional[dict] = None,
         **kwargs: Any,
     ) -> LLM:
         """Construct the pipeline object from model_id and task."""
         try:
             from transformers import (
-                AutoModelForCausalLM,
                 AutoModelForSeq2SeqLM,
                 AutoTokenizer,
+                MODEL_FOR_CAUSAL_LM_MAPPING,
             )
             from transformers import pipeline as hf_pipeline
+            from auto_gptq import (
+                AutoGPTQForCausalLM,
+                LlamaGPTQForCausalLM,
+            )
 
         except ImportError:
             raise ValueError(
@@ -85,13 +95,25 @@ class HuggingFacePipeline(LLM):
             )
 
         _model_kwargs = model_kwargs or {}
-        tokenizer = AutoTokenizer.from_pretrained(model_id, **_model_kwargs)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name_or_path,
+            use_fast=True,
+        )
 
         try:
             if task == "text-generation":
-                model = AutoModelForCausalLM.from_pretrained(model_id, **_model_kwargs)
+                MODEL_FOR_CAUSAL_LM_MAPPING.register("LlamaGPTQForCausalLM", LlamaGPTQForCausalLM)
+                model = AutoGPTQForCausalLM.from_quantized(
+                    model_name_or_path,
+                    model_basename=model_basename,
+                    use_safetensors=True,
+                    trust_remote_code=False,
+                    device=device,
+                    use_triton=False,
+                    quantize_config=None,
+                )
             elif task in ("text2text-generation", "summarization"):
-                model = AutoModelForSeq2SeqLM.from_pretrained(model_id, **_model_kwargs)
+                model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, **_model_kwargs)
             else:
                 raise ValueError(
                     f"Got invalid task {task}, "
@@ -137,11 +159,13 @@ class HuggingFacePipeline(LLM):
                 f"Got invalid task {pipeline.task}, "
                 f"currently only {VALID_TASKS} are supported"
             )
+        _call_kwargs = call_kwargs or {}
         return cls(
             pipeline=pipeline,
-            model_id=model_id,
+            model_id=model_name_or_path,
             model_kwargs=_model_kwargs,
             pipeline_kwargs=_pipeline_kwargs,
+            call_kwargs=_call_kwargs,
             **kwargs,
         )
 
@@ -156,7 +180,7 @@ class HuggingFacePipeline(LLM):
 
     @property
     def _llm_type(self) -> str:
-        return "huggingface_pipeline"
+        return "autogptq_pipeline"
 
     def _call(
         self,
@@ -165,7 +189,10 @@ class HuggingFacePipeline(LLM):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> str:
-        response = self.pipeline(prompt)
+        response = self.pipeline(
+            prompt,
+            **self.call_kwargs,
+        )
         if self.pipeline.task == "text-generation":
             # Text generation return includes the starter text.
             text = response[0]["generated_text"][len(prompt) :]
