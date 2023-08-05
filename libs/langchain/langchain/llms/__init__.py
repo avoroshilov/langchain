@@ -24,6 +24,7 @@ from langchain.llms.aleph_alpha import AlephAlpha
 from langchain.llms.amazon_api_gateway import AmazonAPIGateway
 from langchain.llms.anthropic import Anthropic
 from langchain.llms.anyscale import Anyscale
+from langchain.llms.autogptq_pipeline import AutoGPTQPipeline
 from langchain.llms.aviary import Aviary
 from langchain.llms.azureml_endpoint import AzureMLOnlineEndpoint
 from langchain.llms.bananadev import Banana

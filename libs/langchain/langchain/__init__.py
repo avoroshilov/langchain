@@ -34,6 +34,7 @@ from langchain.llms import (
     StochasticAI,
     Writer,
 )
+from langchain.llms.autogptq_pipeline import AutoGPTQPipeline
 from langchain.llms.huggingface_pipeline import HuggingFacePipeline
 from langchain.prompts import (
     FewShotPromptTemplate,
