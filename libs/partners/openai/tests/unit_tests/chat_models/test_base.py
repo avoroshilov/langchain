@@ -15,7 +15,10 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
-from langchain_openai import ChatOpenAI
+from langchain_openai import (
+    AuthBaseChatOpenAI,
+    ChatOpenAI,
+)
 from langchain_openai.chat_models.base import (
     _convert_dict_to_message,
     _convert_message_to_dict,
@@ -236,6 +239,27 @@ async def test_openai_ainvoke(mock_completion: dict) -> None:
         assert res.content == "Bar Baz"
     assert completed
 
+def test_openai_invoke_creds(mock_completion: dict) -> None:
+    llm = ChatOpenAI()
+    auth_validated = False
+
+    class TestAuthBase(AuthBaseChatOpenAI):
+        def validate_auth(self):
+            nonlocal auth_validated
+            auth_validated = True
+
+    llm.auth_base = TestAuthBase()
+
+    mock_client = MagicMock()
+    mock_client.create.return_value = mock_completion
+    with patch.object(
+        llm,
+        "client",
+        mock_client,
+    ):
+        res = llm.invoke("bar")
+        assert res.content == "Bar Baz"
+    assert auth_validated
 
 @pytest.mark.parametrize(
     "model",

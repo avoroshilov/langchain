@@ -16,6 +16,7 @@ from typing import (
     Tuple,
     Union,
     cast,
+    Type,
 )
 
 import openai
@@ -36,6 +37,9 @@ from langchain_core.utils import (
 
 logger = logging.getLogger(__name__)
 
+class AuthBaseEmbeddingsOpenAI(BaseModel):
+    def validate_auth(self):
+        pass
 
 class OpenAIEmbeddings(BaseModel, Embeddings):
     """OpenAI embedding models.
@@ -129,6 +133,9 @@ class OpenAIEmbeddings(BaseModel, Embeddings):
     http_async_client: Union[Any, None] = None
     """Optional httpx.AsyncClient. Only used for async invocations. Must specify 
         http_client as well if you'd like a custom client for sync invocations."""
+    auth_base: Optional[Type[AuthBaseEmbeddingsOpenAI]] = None
+    """Object that allows to validate authentication information before
+        client calls"""
 
     class Config:
         """Configuration for this pydantic object."""
@@ -330,6 +337,8 @@ class OpenAIEmbeddings(BaseModel, Embeddings):
 
         batched_embeddings: List[List[float]] = []
         for i in _iter:
+            if self.auth_base:
+                self.auth_base.validate_auth()
             response = self.client.create(
                 input=tokens[i : i + _chunk_size], **self._invocation_params
             )
@@ -349,6 +358,8 @@ class OpenAIEmbeddings(BaseModel, Embeddings):
         for i in range(len(texts)):
             _result = results[i]
             if len(_result) == 0:
+                if self.auth_base:
+                    self.auth_base.validate_auth()
                 average_embedded = self.client.create(
                     input="", **self._invocation_params
                 )
@@ -455,6 +466,8 @@ class OpenAIEmbeddings(BaseModel, Embeddings):
         batched_embeddings: List[List[float]] = []
         _chunk_size = chunk_size or self.chunk_size
         for i in range(0, len(tokens), _chunk_size):
+            if self.auth_base:
+                self.auth_base.validate_auth()
             response = await self.async_client.create(
                 input=tokens[i : i + _chunk_size], **self._invocation_params
             )
@@ -473,6 +486,8 @@ class OpenAIEmbeddings(BaseModel, Embeddings):
         for i in range(len(texts)):
             _result = results[i]
             if len(_result) == 0:
+                if self.auth_base:
+                    self.auth_base.validate_auth()
                 average_embedded = await self.async_client.create(
                     input="", **self._invocation_params
                 )

@@ -291,6 +291,9 @@ class _AllReturnType(TypedDict):
     parsed: Optional[_DictOrPydantic]
     parsing_error: Optional[BaseException]
 
+class AuthBaseChatOpenAI(BaseModel):
+    def validate_auth(self):
+        pass
 
 class ChatOpenAI(BaseChatModel):
     """`OpenAI` Chat large language models API.
@@ -389,6 +392,9 @@ class ChatOpenAI(BaseChatModel):
     http_async_client: Union[Any, None] = None
     """Optional httpx.AsyncClient. Only used for async invocations. Must specify 
         http_client as well if you'd like a custom client for sync invocations."""
+    auth_base: Optional[Type[AuthBaseChatOpenAI]] = None
+    """Object that allows to validate authentication information before
+        client calls"""
 
     class Config:
         """Configuration for this pydantic object."""
@@ -523,6 +529,8 @@ class ChatOpenAI(BaseChatModel):
         params = {**params, **kwargs, "stream": True}
 
         default_chunk_class = AIMessageChunk
+        if self.auth_base:
+            self.auth_base.validate_auth()
         with self.client.create(messages=message_dicts, **params) as response:
             for chunk in response:
                 if not isinstance(chunk, dict):
@@ -565,6 +573,8 @@ class ChatOpenAI(BaseChatModel):
             return generate_from_stream(stream_iter)
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs}
+        if self.auth_base:
+            self.auth_base.validate_auth()
         response = self.client.create(messages=message_dicts, **params)
         return self._create_chat_result(response)
 
@@ -622,6 +632,8 @@ class ChatOpenAI(BaseChatModel):
         params = {**params, **kwargs, "stream": True}
 
         default_chunk_class = AIMessageChunk
+        if self.auth_base:
+            self.auth_base.validate_auth()
         response = await self.async_client.create(messages=message_dicts, **params)
         async with response:
             async for chunk in response:
@@ -666,6 +678,8 @@ class ChatOpenAI(BaseChatModel):
 
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs}
+        if self.auth_base:
+            self.auth_base.validate_auth()
         response = await self.async_client.create(messages=message_dicts, **params)
         return self._create_chat_result(response)
 
